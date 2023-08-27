@@ -4,14 +4,17 @@ import javax.swing.JPanel;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.event.KeyListener;
+import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
+import java.awt.event.ActionEvent;
 import java.awt.image.BufferedImage;
+import javax.swing.Timer;
 import java.io.File;
 
 import javax.imageio.ImageIO;
 import reader.MapData;
 
-public class GamePanel extends JPanel implements KeyListener {
+public class GamePanel extends JPanel implements KeyListener, ActionListener {
 
   private boolean mapLoaded = false;
   private int playerRow = -1;
@@ -32,12 +35,17 @@ public class GamePanel extends JPanel implements KeyListener {
   private final int TILE_SIZE = 32;
 
   private boolean freePlay = false;
+  private String solutionString = "";
+  private int solutionCtr = -1;
+
+  private Timer animationTimer;
 
   public GamePanel() {
     this.setBackground(Color.BLACK);
     loadImages();
     this.addKeyListener(this);
     this.setFocusable(true);
+
   }
 
   private void loadImages() {
@@ -163,36 +171,37 @@ public class GamePanel extends JPanel implements KeyListener {
     freePlay = true;
   }
 
-  @Override
-  public void keyPressed(KeyEvent e) {
-    if (!freePlay)
-      return;
+  // 0 - Up, 1 - down, 2 - left, 3 - right
+  private void executeMove(int direction) {
     int ptRow = -1;
     int ptCol = -1;
     int btRow = -1;
     int btCol = -1;
-    if (e.getKeyCode() == KeyEvent.VK_UP) {
+    if (direction == 0) {
       ptRow = playerRow - 1;
       ptCol = playerColumn;
       btRow = playerRow - 2;
       btCol = playerColumn;
-    } else if (e.getKeyCode() == KeyEvent.VK_DOWN) {
+    } else if (direction == 1) {
       ptRow = playerRow + 1;
       ptCol = playerColumn;
       btRow = playerRow + 2;
       btCol = playerColumn;
-    } else if (e.getKeyCode() == KeyEvent.VK_LEFT) {
+    } else if (direction == 2) {
       ptRow = playerRow;
       ptCol = playerColumn - 1;
       btRow = playerRow;
       btCol = playerColumn - 2;
-    } else if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
+    } else if (direction == 3) {
       ptRow = playerRow;
       ptCol = playerColumn + 1;
       btRow = playerRow;
       btCol = playerColumn + 2;
     }
+    handleMovement(ptRow, ptCol, btRow, btCol);
+  }
 
+  private void handleMovement(int ptRow, int ptCol, int btRow, int btCol) {
     if (ptRow < 0 || ptRow >= rows || ptCol < 0 || ptCol >= columns) {
       return;
     }
@@ -222,6 +231,27 @@ public class GamePanel extends JPanel implements KeyListener {
   }
 
   @Override
+  public void keyPressed(KeyEvent e) {
+    if (!freePlay)
+      return;
+
+    switch (e.getKeyCode()) {
+      case KeyEvent.VK_UP:
+        executeMove(0);
+        break;
+      case KeyEvent.VK_DOWN:
+        executeMove(1);
+        break;
+      case KeyEvent.VK_LEFT:
+        executeMove(2);
+        break;
+      case KeyEvent.VK_RIGHT:
+        executeMove(3);
+        break;
+    }
+  }
+
+  @Override
   public void keyReleased(KeyEvent e) {
 
   }
@@ -229,5 +259,42 @@ public class GamePanel extends JPanel implements KeyListener {
   @Override
   public void keyTyped(KeyEvent e) {
 
+  }
+
+  public void playSolution(String solutionString) {
+    playSolution(solutionString, 500);
+  }
+
+  public void playSolution(String solutionString, int delay) {
+    freePlay = false;
+    this.solutionString = solutionString;
+    this.solutionCtr = 0;
+    this.animationTimer = new Timer(delay, this);
+    this.animationTimer.start();
+  }
+
+  @Override
+  public void actionPerformed(ActionEvent e) {
+    if (e.getSource() == animationTimer) {
+      if (this.solutionCtr >= this.solutionString.length()) {
+        this.animationTimer.stop();
+        return;
+      }
+      int nextMove = this.solutionString.charAt(this.solutionCtr++);
+      switch (nextMove) {
+        case 'u':
+          executeMove(0);
+          break;
+        case 'd':
+          executeMove(1);
+          break;
+        case 'l':
+          executeMove(2);
+          break;
+        case 'r':
+          executeMove(3);
+          break;
+      }
+    }
   }
 }
