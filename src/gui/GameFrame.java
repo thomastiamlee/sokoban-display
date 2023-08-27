@@ -21,6 +21,7 @@ public class GameFrame extends JFrame {
     this.add(mainPanel);
 
     this.mainPanel.loadMap(mapData);
+    this.mainPanel.initiateFreePlay();
 
     this.setVisible(true);
   }
