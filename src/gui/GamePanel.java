@@ -8,8 +8,10 @@ import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.ActionEvent;
 import java.awt.image.BufferedImage;
+import java.awt.Font;
 import javax.swing.Timer;
 import java.io.File;
+import java.lang.Thread;
 
 import javax.imageio.ImageIO;
 import reader.MapData;
@@ -40,12 +42,28 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
 
   private Timer animationTimer;
 
+  private Font statusFont;
+  private Font statusValueFont;
+  private String statusString = "";
+
+  private final String STATUS_WAITING_FOR_SOLUTION = "Waiting for solution...";
+  private final String STATUS_PLAYING_SOLUTION = "Playing solution...";
+  private final String STATUS_FINISHED_PLAYING_SOLUTION = "SOLUTION FINISHED!";
+  private final String STATUS_FREE_PLAY = "FREE PLAY MODE!";
+
+  private int progress = 0;
+  private int moves = 0;
+  private int boxCount = 0;
+  private int goalCount = 0;
+  private int playerCount = 0;
+
   public GamePanel() {
     this.setBackground(Color.BLACK);
     loadImages();
     this.addKeyListener(this);
     this.setFocusable(true);
-
+    this.statusFont = new Font("SansSerif", Font.BOLD, 20);
+    this.statusValueFont = new Font("SansSerif", Font.PLAIN, 20);
   }
 
   private void loadImages() {
@@ -61,11 +79,14 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
   }
 
   public void loadMap(MapData mapData) {
+    progress = 0;
+    moves = 0;
+
     map = new char[mapData.rows][mapData.columns];
     items = new char[mapData.rows][mapData.columns];
-    int playerCount = 0;
-    int boxCount = 0;
-    int goalCount = 0;
+    playerCount = 0;
+    boxCount = 0;
+    goalCount = 0;
 
     for (int i = 0; i < mapData.rows; i++) {
       for (int j = 0; j < mapData.columns; j++) {
@@ -104,6 +125,7 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
             items[i][j] = '$';
             boxCount++;
             goalCount++;
+            progress++;
             break;
           case ' ':
             map[i][j] = ' ';
@@ -163,11 +185,21 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
 
       g.setColor(Color.GREEN);
       g.fillRect(0, this.getHeight() - 32, this.getWidth(), 32);
+      g.setColor(Color.RED);
+      g.setFont(this.statusFont);
+      g.drawString(this.statusString, this.getWidth() - 250, this.getHeight() - 12);
       g.setColor(Color.BLACK);
+      g.setFont(this.statusFont);
+      g.drawString("MOVES: ", 8, this.getHeight() - 12);
+      g.drawString("PROGRESS: ", 256, this.getHeight() - 12);
+      g.setFont(this.statusValueFont);
+      g.drawString("" + moves, 96, this.getHeight() - 12);
+      g.drawString(progress + " / " + boxCount, 382, this.getHeight() - 12);
     }
   }
 
   public void initiateFreePlay() {
+    this.statusString = STATUS_FREE_PLAY;
     freePlay = true;
   }
 
@@ -220,12 +252,20 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
       if (map[btRow][btCol] == '#' || items[btRow][btCol] == '$') {
         return;
       }
+      if (map[btRow][btCol] == '.') {
+        progress++;
+      }
+      if (map[ptRow][ptCol] == '.') {
+        progress--;
+      }
       items[btRow][btCol] = '$';
       items[playerRow][playerColumn] = ' ';
       items[ptRow][ptCol] = '@';
       playerRow = ptRow;
       playerColumn = ptCol;
     }
+
+    moves++;
 
     this.repaint();
   }
@@ -267,6 +307,7 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
 
   public void playSolution(String solutionString, int delay) {
     freePlay = false;
+    this.statusString = STATUS_PLAYING_SOLUTION;
     this.solutionString = solutionString;
     this.solutionCtr = 0;
     this.animationTimer = new Timer(delay, this);
@@ -278,6 +319,8 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
     if (e.getSource() == animationTimer) {
       if (this.solutionCtr >= this.solutionString.length()) {
         this.animationTimer.stop();
+        this.statusString = STATUS_FINISHED_PLAYING_SOLUTION;
+        this.repaint();
         return;
       }
       int nextMove = this.solutionString.charAt(this.solutionCtr++);
