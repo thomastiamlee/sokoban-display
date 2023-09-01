@@ -11,7 +11,6 @@ import java.awt.image.BufferedImage;
 import java.awt.Font;
 import javax.swing.Timer;
 import java.io.File;
-import java.lang.Thread;
 
 import javax.imageio.ImageIO;
 import reader.MapData;
@@ -37,6 +36,7 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
   private final int TILE_SIZE = 32;
 
   private boolean freePlay = false;
+  private boolean waitingForSpace = false;
   private String solutionString = "";
   private int solutionCtr = -1;
 
@@ -46,10 +46,14 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
   private Font statusValueFont;
   private String statusString = "";
 
+  private final String STATUS_WAITING_FOR_SPACE = "Push SPACE to start Bot...";
   private final String STATUS_WAITING_FOR_SOLUTION = "Waiting for solution...";
+  private final String STATUS_SOLUTION_TIMEOUT = "TIME'S UP! Bot took too long thinking...";
   private final String STATUS_PLAYING_SOLUTION = "Playing solution...";
   private final String STATUS_FINISHED_PLAYING_SOLUTION = "SOLUTION FINISHED!";
   private final String STATUS_FREE_PLAY = "FREE PLAY MODE!";
+
+  private String solutionTimeString = "";
 
   private int progress = 0;
   private int moves = 0;
@@ -57,13 +61,21 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
   private int goalCount = 0;
   private int playerCount = 0;
 
+  private BotThread solutionThread;
+  private Timer solutionTimer;
+  private Timer checkForSolutionTimer;
+  private long solutionStartTime;
+  private long solutionEndTime;
+
+  private final int SOLUTION_TIME_LIMIT = 10000;
+
   public GamePanel() {
     this.setBackground(Color.BLACK);
     loadImages();
     this.addKeyListener(this);
     this.setFocusable(true);
-    this.statusFont = new Font("SansSerif", Font.BOLD, 20);
-    this.statusValueFont = new Font("SansSerif", Font.PLAIN, 20);
+    this.statusFont = new Font("SansSerif", Font.BOLD, 16);
+    this.statusValueFont = new Font("SansSerif", Font.PLAIN, 16);
   }
 
   private void loadImages() {
@@ -183,24 +195,32 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
         }
       }
 
-      g.setColor(Color.GREEN);
+      g.setColor(new Color(150, 214, 124));
       g.fillRect(0, this.getHeight() - 32, this.getWidth(), 32);
       g.setColor(Color.RED);
       g.setFont(this.statusFont);
-      g.drawString(this.statusString, this.getWidth() - 250, this.getHeight() - 12);
+      g.drawString(this.statusString, this.getWidth() - 375, this.getHeight() - 12);
       g.setColor(Color.BLACK);
       g.setFont(this.statusFont);
       g.drawString("MOVES: ", 8, this.getHeight() - 12);
-      g.drawString("PROGRESS: ", 256, this.getHeight() - 12);
+      g.drawString("PROGRESS: ", 176, this.getHeight() - 12);
       g.setFont(this.statusValueFont);
-      g.drawString("" + moves, 96, this.getHeight() - 12);
-      g.drawString(progress + " / " + boxCount, 382, this.getHeight() - 12);
+      g.drawString("" + moves, 80, this.getHeight() - 12);
+      g.drawString(progress + " / " + boxCount, 286, this.getHeight() - 12);
+      g.drawString(this.solutionTimeString, this.getWidth() - 60, this.getHeight() - 12);
     }
   }
 
   public void initiateFreePlay() {
     this.statusString = STATUS_FREE_PLAY;
+    waitingForSpace = false;
     freePlay = true;
+  }
+
+  public void initiateSolution() {
+    this.statusString = STATUS_WAITING_FOR_SPACE;
+    waitingForSpace = true;
+    freePlay = false;
   }
 
   // 0 - Up, 1 - down, 2 - left, 3 - right
@@ -272,22 +292,46 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
 
   @Override
   public void keyPressed(KeyEvent e) {
-    if (!freePlay)
-      return;
+    if (freePlay) {
+      switch (e.getKeyCode()) {
+        case KeyEvent.VK_UP:
+          executeMove(0);
+          break;
+        case KeyEvent.VK_DOWN:
+          executeMove(1);
+          break;
+        case KeyEvent.VK_LEFT:
+          executeMove(2);
+          break;
+        case KeyEvent.VK_RIGHT:
+          executeMove(3);
+          break;
+      }
+    } else if (waitingForSpace) {
+      if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+        waitingForSpace = false;
+        this.statusString = STATUS_WAITING_FOR_SOLUTION;
 
-    switch (e.getKeyCode()) {
-      case KeyEvent.VK_UP:
-        executeMove(0);
-        break;
-      case KeyEvent.VK_DOWN:
-        executeMove(1);
-        break;
-      case KeyEvent.VK_LEFT:
-        executeMove(2);
-        break;
-      case KeyEvent.VK_RIGHT:
-        executeMove(3);
-        break;
+        char[][] mapDataCopy = new char[rows][columns];
+        char[][] itemsDataCopy = new char[rows][columns];
+
+        for (int i = 0; i < rows; i++) {
+          for (int j = 0; j < columns; j++) {
+            mapDataCopy[i][j] = map[i][j];
+            itemsDataCopy[i][j] = items[i][j];
+          }
+        }
+
+        solutionThread = new BotThread(columns, rows, mapDataCopy, itemsDataCopy);
+        solutionThread.start();
+        solutionStartTime = System.nanoTime();
+        solutionTimer = new Timer(SOLUTION_TIME_LIMIT, this);
+        solutionTimer.start();
+        checkForSolutionTimer = new Timer(30, this);
+        checkForSolutionTimer.start();
+
+        this.repaint();
+      }
     }
   }
 
@@ -302,7 +346,7 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
   }
 
   public void playSolution(String solutionString) {
-    playSolution(solutionString, 500);
+    playSolution(solutionString, 100);
   }
 
   public void playSolution(String solutionString, int delay) {
@@ -338,6 +382,25 @@ public class GamePanel extends JPanel implements KeyListener, ActionListener {
           executeMove(3);
           break;
       }
+    } else if (e.getSource() == checkForSolutionTimer) {
+      if (!solutionThread.isAlive()) {
+        // Solution was found
+        solutionTimer.stop();
+        checkForSolutionTimer.stop();
+        String solution = solutionThread.getSolution();
+        this.playSolution(solution);
+      }
+      long elapsedSolutionTime = System.nanoTime() - solutionStartTime;
+      this.solutionTimeString = String.format("%.2f", elapsedSolutionTime / 1000000000.0) + "s";
+      this.repaint();
+    } else if (e.getSource() == solutionTimer) {
+      // Solution was not found
+      solutionTimer.stop();
+      checkForSolutionTimer.stop();
+      long elapsedSolutionTime = System.nanoTime() - solutionStartTime;
+      this.solutionTimeString = String.format("%.2f", elapsedSolutionTime / 1000000000.0);
+      this.statusString = STATUS_SOLUTION_TIMEOUT;
+      this.repaint();
     }
   }
 }

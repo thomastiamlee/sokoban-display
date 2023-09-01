@@ -8,14 +8,16 @@
       "type": "java",
       "name": "Current File",
       "request": "launch",
-      "mainClass": "${file}"
+      "mainClass": "${file}",
+      "args": "maptest bot"
     },
     {
       "type": "java",
       "name": "Driver",
       "request": "launch",
       "mainClass": "main.Driver",
-      "projectName": "sokoban-display_db1fadd2"
+      "projectName": "sokoban-display_db1fadd2",
+      "args": "maptest bot"
     }
   ]
 }
