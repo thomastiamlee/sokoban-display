@@ -12,7 +12,7 @@ public class SokoBot {
      * that just moves left and right repeatedly.
      */
     try {
-      Thread.sleep(11000);
+      Thread.sleep(3000);
     } catch (Exception ex) {
       ex.printStackTrace();
     }
